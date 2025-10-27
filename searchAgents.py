@@ -9,6 +9,7 @@ Autor(i): <completați aici numele membrilor echipei>
 from __future__ import annotations
 
 from typing import Any, Callable, Dict, List, Optional
+import sys
 
 import util
 from game import Directions
@@ -37,19 +38,31 @@ class SearchAgent:
     python pacman.py -l bigMaze -z .5 -p SearchAgent -a fn=astar,heuristic=manhattanHeuristic
     """
 
-    def __init__(self, fn: str = 'dfs', heuristic: str = 'nullHeuristic') -> None:
+    def __init__(self, fn: str = 'dfs', prob: str = 'PositionSearchProblem', heuristic: str = 'nullHeuristic') -> None:
+        # Rezolvă funcția de căutare din modulul `search`
         if not hasattr(search, fn):
             raise AttributeError(f"Funcția de căutare '{fn}' nu a fost găsită în modulul search.")
         func = getattr(search, fn)
 
-        # Dacă funcția cere o euristică, o injectăm din modulul search
+        # Rezolvă tipul problemei (din acest modul)
+        try:
+            self.searchType = globals()[prob]
+        except KeyError:
+            raise AttributeError(f"Tipul de problemă '{prob}' nu a fost găsit în searchAgents.")
+
+        # Rezolvă euristica: mai întâi în acest modul, apoi în modulul `search`
+        heuristic_fn = None
         if 'heuristic' in func.__code__.co_varnames:
-            if not hasattr(search, heuristic):
+            module_self = sys.modules[__name__]
+            if hasattr(module_self, heuristic):
+                heuristic_fn = getattr(module_self, heuristic)
+            elif hasattr(search, heuristic):
+                heuristic_fn = getattr(search, heuristic)
+            else:
                 raise AttributeError(
-                    f"Euristica '{heuristic}' nu a fost găsită în modulul search."
+                    f"Euristica '{heuristic}' nu a fost găsită nici în searchAgents, nici în search."
                 )
-            heuristic_fn = getattr(search, heuristic)
-            self.searchFunction = lambda prob: func(prob, heuristic=heuristic_fn)
+            self.searchFunction = lambda prob_instance: func(prob_instance, heuristic=heuristic_fn)
         else:
             self.searchFunction = func
 
@@ -60,7 +73,7 @@ class SearchAgent:
         Este apelată la începutul jocului. Aici rulăm căutarea pentru a obține
         lista de acțiuni pe care agentul le va executa.
         """
-        problem = PositionSearchProblem(state)
+        problem = self.searchType(state)
         self.actions = self.searchFunction(problem)
 
     def getAction(self, state):
